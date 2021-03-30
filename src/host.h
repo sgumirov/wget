@@ -102,6 +102,8 @@ bool is_valid_ip_address (const char *name);
 bool accept_domain (struct url *);
 bool sufmatch (const char **, const char *);
 
+bool cache_host_ip(const char *, const char *);
+
 void host_cleanup (void);
 
 #endif /* HOST_H */

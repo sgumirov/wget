@@ -626,6 +626,65 @@ cache_store (const char *host, struct address_list *al)
     }
 }
 
+/* Store HOST and IP to cache. */
+bool cache_host_ip (const char *host, const char *ip)
+{
+  bool result = false;
+  const char *end = ip + strlen (ip);
+  bool is_ipv6 = is_valid_ipv6_address (ip, end);
+  bool is_ipv4 = is_valid_ipv4_address (ip, end);
+  struct address_list *al;
+#ifndef ENABLE_IPV6
+  {
+    if (!is_valid_ipv4_address (ip, end))
+      {
+        logprintf (LOG_ALWAYS, _("Cannot parse IPv4 address (IPv6 isn't supported): %s.\n"), quote (ip));
+        return false;
+      }
+    in_addr_t ipv4 = inet_addr (ip);
+    if (ipv4 == (in_addr_t) -1)
+      {
+        logprintf (LOG_ALWAYS, _("Cannot parse ip: %s\n"), quote (ip));
+        return false;
+      }
+    uint32_t addr_ipv4 = (uint32_t) ipv4;
+    char *vec[2];
+    vec[0] = (char *)&addr_ipv4;
+    vec[1] = NULL;
+    al = address_list_from_ipv4_addresses (vec);
+    result = true;
+  }
+#else  /* ENABLE_IPV6 */
+  {
+    int err;
+    if (!is_ipv4 && !is_ipv6)
+      {
+        logprintf (LOG_ALWAYS, _("IP is neither IPv6 nor IPv4 address: %s.\n"), quote (ip));
+        return false;
+      }
+
+    ip_address ip_addr;
+    ip_addr.family = is_ipv6 ? AF_INET6 : AF_INET;
+    if (inet_pton (ip_addr.family, ip, &ip_addr.data) != 1)
+      {
+        logprintf (LOG_ALWAYS, _("Cannot parse IP as IPv6 or IPv4 address: %s.\n"), quote (ip));
+        return false;
+      }
+    al = xnew0 (struct address_list);
+    al->addresses = xnew_array (ip_address, 1);
+    al->count     = 1;
+    al->refcount  = 1;
+    ip_address *ip = al->addresses;
+    ip->family = ip_addr.family;
+    memcpy (IP_INADDR_DATA (ip), IP_INADDR_DATA (&ip_addr), 4);
+    result = true;
+  }
+#endif
+  cache_store (host, al);
+  logprintf (LOG_VERBOSE, _("Added to DNS cache: %s:%s\n"), quote_n (0, host), quote_n (1, ip));
+  return result;
+}
+
 /* Remove HOST from the DNS cache.  Does nothing is HOST is not in
    the cache.  */
 

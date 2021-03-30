@@ -110,6 +110,8 @@ struct options
   char **exclude_domains;
   bool dns_cache;               /* whether we cache DNS lookups. */
 
+  bool resolve;                 /* Whether DNS host resolution is overriden for some hosts. */
+
   char **follow_tags;           /* List of HTML tags to recursively follow. */
   char **ignore_tags;           /* List of HTML tags to ignore if recursing. */
 

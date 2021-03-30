@@ -111,6 +111,7 @@ CMD_DECLARE (cmd_spec_progress);
 CMD_DECLARE (cmd_spec_progressdisp);
 CMD_DECLARE (cmd_spec_recursive);
 CMD_DECLARE (cmd_spec_regex_type);
+CMD_DECLARE (cmd_spec_resolve_host);
 CMD_DECLARE (cmd_spec_restrict_file_names);
 CMD_DECLARE (cmd_spec_report_speed);
 #ifdef HAVE_SSL
@@ -309,6 +310,7 @@ static const struct {
   { "remoteencoding",   &opt.encoding_remote,   cmd_string },
   { "removelisting",    &opt.remove_listing,    cmd_boolean },
   { "reportspeed",             &opt.report_bps, cmd_spec_report_speed},
+  { "resolve",          &opt.resolve,           cmd_spec_resolve_host },
   { "restrictfilenames", NULL,                  cmd_spec_restrict_file_names },
   { "retrsymlinks",     &opt.retr_symlinks,     cmd_boolean },
   { "retryconnrefused", &opt.retry_connrefused, cmd_boolean },
@@ -512,6 +514,7 @@ defaults (void)
 #endif
 
   opt.enable_xattr = false;
+  opt.resolve = false;
 }
 
 /* Return the user's home directory (strdup-ed), or NULL if none is
@@ -1548,6 +1551,40 @@ cmd_spec_header (const char *com, const char *val, void *place_ignored _GL_UNUSE
     }
   opt.user_headers = vec_append (opt.user_headers, val);
   return true;
+}
+
+static bool
+cmd_spec_resolve_host (const char *com, const char *val, void *place)
+{
+  /* Split host and ip to put them into dns cache. */
+  const char* delimeter = strpbrk (val, ":");
+  size_t len = strnlen (val, 256);
+  bool result = false;
+  if (delimeter > val && delimeter < val + len)
+    {
+      int host_len = delimeter - val + 1;
+      int ip_len = val + len - delimeter;
+      char* host = xmalloc (host_len);
+      char* ip = xmalloc (ip_len);
+      strncpy (host, val, host_len - 1);
+      strncpy (ip, delimeter + 1, ip_len - 1);
+      host[host_len - 1] = 0;
+      ip[ip_len - 1] = 0;
+      if (!cache_host_ip(host, ip))
+        {
+          fprintf (stderr, _("%s: %s: Invalid IP value: %s\n"), exec_name, com, quote (ip));
+          return false;
+        }
+      xfree(host);
+      xfree(ip);
+      result = true;
+    }
+  else
+    {
+      fprintf (stderr, _("%s: %s: Invalid HOST:IP value: %s.\n"), exec_name, com, quote (val));
+    }
+  *(bool*)place = result;
+  return result;
 }
 
 static bool
