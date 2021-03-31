@@ -12,7 +12,7 @@ use HTTPTest;
 
 # code, msg, headers, content
 my %urls = (
-    '/resolve' => {
+    '/' => {
         code => "200",
         msg => "Dontcare",
     },
@@ -28,7 +28,7 @@ unless ($localip =~ "127.0.0.1")
 }
 
 my $cmdline = $WgetTest::WGETPATH . " --resolve $resolved_host:$localip"
-    . " http://$resolved_host:{{port}}/resolve";
+    . " http://$resolved_host:{{port}}/";
 
 my $expected_error_code = 0;
 
