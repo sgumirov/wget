@@ -12,8 +12,8 @@ use HTTPTest;
 
 # code, msg, headers, content
 my %urls = (
-    '/' => {
-        code => "200",
+    '/dummy' => {
+        code => "204",
         msg => "Dontcare",
     },
 );
@@ -28,7 +28,7 @@ unless ($localip =~ "127.0.0.1")
 }
 
 my $cmdline = $WgetTest::WGETPATH . " --resolve $resolved_host:$localip"
-    . " http://$resolved_host:{{port}}/";
+    . " http://$resolved_host:{{port}}/dummy";
 
 my $expected_error_code = 0;
 
