@@ -19,13 +19,7 @@ my %urls = (
 );
 
 my $resolved_host = "example.com";
-
-my $localip = inet_ntoa(inet_aton("localhost"));
-unless ($localip =~ "127.0.0.1")
-{
-    warn "Unexpected IP for localhost: $localip\n";
-    exit 77;
-}
+my $localip = "::1";
 
 my $cmdline = $WgetTest::WGETPATH . " --resolve $resolved_host:$localip"
     . " http://$resolved_host:{{port}}/dummy";

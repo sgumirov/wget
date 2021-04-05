@@ -1553,31 +1553,38 @@ cmd_spec_header (const char *com, const char *val, void *place_ignored _GL_UNUSE
   return true;
 }
 
+struct host_ip {
+  char host[256];
+  char ip[256];
+};
+
+static bool
+split_host_ip (const char *value, struct host_ip *result)
+{
+  if (!value || !result) return false;
+
+  size_t val_len = strnlen(value, 256);
+  char *pos = strpbrk(value, ":");
+  return pos &&
+      pos - value < val_len &&
+      0 < snprintf(result->host, pos - value + 1, "%s", value) &&
+      0 < snprintf(result->ip, val_len + value - pos, "%s", pos + 1);
+}
+
 static bool
 cmd_spec_resolve_host (const char *com, const char *val, void *place)
 {
   /* Split host and ip to put them into dns cache. */
-  const char* delimeter = strpbrk (val, ":");
-  size_t len = strnlen (val, 256);
+  struct host_ip split_result;
   bool result = false;
-  if (delimeter > val && delimeter < val + len)
+  if (split_host_ip(val, &split_result))
     {
-      int host_len = delimeter - val + 1;
-      int ip_len = val + len - delimeter;
-      char* host = xmalloc (host_len);
-      char* ip = xmalloc (ip_len);
-      strncpy (host, val, host_len - 1);
-      strncpy (ip, delimeter + 1, ip_len - 1);
-      host[host_len - 1] = 0;
-      ip[ip_len - 1] = 0;
-      if (!cache_host_ip(host, ip))
+      if (!cache_host_ip(split_result.host, split_result.ip))
         {
-          fprintf (stderr, _("%s: %s: Invalid IP value: %s\n"), exec_name, com, quote (ip));
-          return false;
+          fprintf (stderr,
+              _("%s: %s: Invalid IP value: %s\n"), exec_name, com, quote (split_result.ip));
         }
-      xfree(host);
-      xfree(ip);
-      result = true;
+      else result = true;
     }
   else
     {
@@ -2164,6 +2171,54 @@ test_cmd_spec_restrict_file_names(void)
                  && (int) opt.restrict_files_os   == test_array[i].expected_restrict_files_os
                  && opt.restrict_files_ctrl == test_array[i].expected_restrict_files_ctrl
                  && (int) opt.restrict_files_case == test_array[i].expected_restrict_files_case);
+    }
+
+  return NULL;
+}
+
+const char *
+test_resolve_argument_parse(void)
+{
+  unsigned i;
+  static const struct {
+    const char *value;
+    const char *expected_host;
+    const char *expected_ip;
+  } test_array[] = {
+    // IPv4 addresses:
+    { "example.com:127.0.0.1", "example.com", "127.0.0.1" },
+    { "example.com:01.102.103.104", "example.com", "01.102.103.104" },
+    // Normal IPv6 addresses
+    { "example.com:2001:db8:3333:4444:CCCC:DDDD:EEEE:FFFF",
+        "example.com", "2001:db8:3333:4444:CCCC:DDDD:EEEE:FFFF" },
+    { "example.com:::", "example.com", "::" },
+    { "example.com:2001:db8::", "example.com", "2001:db8::" },
+    { "example.com:::1234:5678", "example.com", "::1234:5678" },
+    { "example.com:2001:db8::1234:5678", "example.com", "2001:db8::1234:5678" },
+    // Dual IPv6 addresses
+    { "example.com:2001:db8::123.123.123.123", "example.com", "2001:db8::123.123.123.123" },
+    { "example.com:::1234:5678:1.2.3.4", "example.com", "::1234:5678:1.2.3.4" },
+    { "example.com:2001:db8::1234:5678:5.6.7.8", "example.com", "2001:db8::1234:5678:5.6.7.8" },
+    { "example.com:::11.22.33.44", "example.com", "::11.22.33.44" },
+    { "example.com:::1234:5678:91.123.4.56", "example.com", "::1234:5678:91.123.4.56" },
+  };
+
+  for (i = 0; i < countof(test_array); ++i)
+    {
+      struct host_ip result;
+
+      mu_assert ("test_resolve_argument_parse: cannot split",
+                  split_host_ip(test_array[i].value, &result));
+
+      fprintf(stderr, "test: test_resolve_argument_parse() 4: i=%d, host=%s, ip=%s, cmp1=%d, cmp2=%d\n", i,
+          result.host, result.ip,
+          strcmp (test_array[i].expected_host, result.host),
+          strcmp (test_array[i].expected_ip, result.ip));
+
+      mu_assert ("test_resolve_argument_parse: wrong host",
+                  0 == strcmp (test_array[i].expected_host, result.host));
+      mu_assert ("test_resolve_argument_parse: wrong ip",
+                  0 == strcmp (test_array[i].expected_ip, result.ip));
     }
 
   return NULL;

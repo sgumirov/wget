@@ -655,6 +655,9 @@ parse_ipv6 (const char *ip)
   al->refcount  = 1;
   al->addresses->family = parsed_ip_addr.family;
   memcpy (IP_INADDR_DATA (al->addresses), IP_INADDR_DATA (&parsed_ip_addr), 4);
+  char ipbuf[256];
+  logprintf(LOG_ALWAYS, _("Parsed ip=%s => %s\n"), ip, inet_ntop(AF_INET6,
+      &parsed_ip_addr, ipbuf, sizeof(ipbuf)));
   return al;
 }
 
