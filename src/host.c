@@ -626,6 +626,82 @@ cache_store (const char *host, struct address_list *al)
     }
 }
 
+#ifdef ENABLE_IPV6
+
+static struct address_list *
+parse_ipv6_address_list (const char *ip)
+{
+  struct address_list *al;
+  int err;
+  const char *end = ip + strlen (ip);
+  bool is_ipv6 = is_valid_ipv6_address (ip, end);
+  bool is_ipv4 = is_valid_ipv4_address (ip, end);
+  if (!is_ipv4 && !is_ipv6)
+    {
+      logprintf (LOG_ALWAYS, _("IP is neither IPv6 nor IPv4 address: %s.\n"), quote (ip));
+      return false;
+    }
+
+  ip_address parsed_ip_addr;
+  parsed_ip_addr.family = is_ipv6 ? AF_INET6 : AF_INET;
+  if (inet_pton (parsed_ip_addr.family, ip, &parsed_ip_addr.data) != 1)
+    {
+      logprintf (LOG_ALWAYS, _("Cannot parse IP as %s address: %s.\n"),
+          is_ipv6 ? "IPv6" : "IPv4", quote (ip));
+      return NULL;
+    }
+  al = xnew0 (struct address_list);
+  al->addresses = xnew_array (ip_address, 1);
+  al->count     = 1;
+  al->refcount  = 1;
+  al->addresses->family = parsed_ip_addr.family;
+  memcpy (IP_INADDR_DATA (al->addresses), IP_INADDR_DATA (&parsed_ip_addr),
+      is_ipv6 ? 16 : 4);
+  return al;
+}
+
+#else  /* not ENABLE_IPV6 */
+
+static struct address_list *
+parse_ipv4_address_list (const char *ip_str)
+{
+  const char *end = ip_str + strnlen (ip_str, 256);
+  if (!is_valid_ipv4_address (ip_str, end))
+    {
+      logprintf (LOG_ALWAYS, _("Cannot parse IPv4 address (IPv6 isn't supported): %s.\n"),
+          quote (ip_str));
+      return false;
+    }
+  struct in_addr ipv4;
+  if (inet_aton (ip_str, &ipv4) != 1)
+    {
+      logprintf (LOG_ALWAYS, _("Cannot parse ip: %s\n"), quote (ip_str));
+      return false;
+    }
+  char *vec[2];
+  vec[0] = (char *)&ipv4;
+  vec[1] = NULL;
+  return address_list_from_ipv4_addresses (vec);
+}
+
+#endif /* not ENABLE_IPV6 */
+
+/* Store HOST and IP to cache. */
+bool
+cache_host_ip (const char *host, const char *ip)
+{
+  struct address_list *al;
+#ifdef ENABLE_IPV6
+  al = parse_ipv6_address_list (ip);
+#else  /* not ENABLE_IPV6 */
+  al = parse_ipv4_address_list (ip);
+#endif
+  if (!al) return false;
+  cache_store (host, al);
+  DEBUGP (("Added to DNS cache: %s:%s\n", quote_n (0, host), quote_n (1, ip)));
+  return true;
+}
+
 /* Remove HOST from the DNS cache.  Does nothing is HOST is not in
    the cache.  */
 
