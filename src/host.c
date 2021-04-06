@@ -629,7 +629,7 @@ cache_store (const char *host, struct address_list *al)
 #ifdef ENABLE_IPV6
 
 static struct address_list *
-parse_ipv6 (const char *ip)
+parse_ipv6_address_list (const char *ip)
 {
   struct address_list *al;
   int err;
@@ -644,9 +644,10 @@ parse_ipv6 (const char *ip)
 
   ip_address parsed_ip_addr;
   parsed_ip_addr.family = is_ipv6 ? AF_INET6 : AF_INET;
-  if (inet_pton (parsed_ip_addr.family, ip, &parsed_ip_addr.data) != 1)
+  if (inet_pton(parsed_ip_addr.family, ip, &parsed_ip_addr.data) != 1)
     {
-      logprintf (LOG_ALWAYS, _("Cannot parse IP as IPv6 or IPv4 address: %s.\n"), quote (ip));
+      logprintf (LOG_ALWAYS, _("Cannot parse IP as %s address: %s.\n"), 
+          is_ipv6 ? "IPv6" : "IPv4", quote (ip));
       return NULL;
     }
   al = xnew0 (struct address_list);
@@ -654,33 +655,33 @@ parse_ipv6 (const char *ip)
   al->count     = 1;
   al->refcount  = 1;
   al->addresses->family = parsed_ip_addr.family;
-  memcpy (IP_INADDR_DATA (al->addresses), IP_INADDR_DATA (&parsed_ip_addr), 4);
+  memcpy (IP_INADDR_DATA (al->addresses), IP_INADDR_DATA (&parsed_ip_addr), 
+      is_ipv6 ? 16 : 4);
   char ipbuf[256];
-  logprintf(LOG_ALWAYS, _("Parsed ip=%s => %s\n"), ip, inet_ntop(AF_INET6,
-      &parsed_ip_addr, ipbuf, sizeof(ipbuf)));
+  char* ip_s = inet_ntop(AF_INET6, &parsed_ip_addr, ipbuf, sizeof(ipbuf)-1);
   return al;
 }
 
 #else  /* not ENABLE_IPV6 */
 
 static struct address_list * 
-parse_ipv4 (const char *ip) 
+parse_ipv4_address_list (const char *ip_str) 
 {
-  const char *end = ip + strlen (ip);
-  if (!is_valid_ipv4_address (ip, end))
+  const char *end = ip_str + strnlen (ip_str, 256);
+  if (!is_valid_ipv4_address (ip_str, end))
     {
-      logprintf (LOG_ALWAYS, _("Cannot parse IPv4 address (IPv6 isn't supported): %s.\n"), quote (ip));
+      logprintf (LOG_ALWAYS, _("Cannot parse IPv4 address (IPv6 isn't supported): %s.\n"), 
+          quote (ip_str));
       return false;
     }
-  in_addr_t ipv4 = inet_addr (ip);
-  if (ipv4 == (in_addr_t) -1)
+  struct in_addr ipv4;
+  if (inet_aton(ip_str, &ipv4) != 1)
     {
-      logprintf (LOG_ALWAYS, _("Cannot parse ip: %s\n"), quote (ip));
+      logprintf (LOG_ALWAYS, _("Cannot parse ip: %s\n"), quote (ip_str));
       return false;
     }
-  uint32_t addr_ipv4 = (uint32_t) ipv4;
   char *vec[2];
-  vec[0] = (char *)&addr_ipv4;
+  vec[0] = (char *)&ipv4;
   vec[1] = NULL;
   return address_list_from_ipv4_addresses (vec);
 }
@@ -693,13 +694,13 @@ cache_host_ip (const char *host, const char *ip)
 {
   struct address_list *al;
 #ifdef ENABLE_IPV6
-  al = parse_ipv6(ip);
+  al = parse_ipv6_address_list(ip);
 #else  /* not ENABLE_IPV6 */
-  al = parse_ipv4(ip);
+  al = parse_ipv4_address_list(ip);
 #endif
   if (!al) return false;
   cache_store (host, al);
-  logprintf (LOG_VERBOSE, _("Added to DNS cache: %s:%s\n"), quote_n (0, host), quote_n (1, ip));
+  DEBUGP (("Added to DNS cache: %s:%s\n", quote_n (0, host), quote_n (1, ip)));
   return true;
 }
 
