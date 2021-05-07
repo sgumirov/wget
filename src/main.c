@@ -416,6 +416,7 @@ static struct cmdline_option option_data[] =
     { "remote-encoding", 0, OPT_VALUE, "remoteencoding", -1 },
     { "remove-listing", 0, OPT_BOOLEAN, "removelisting", -1 },
     { "report-speed", 0, OPT_BOOLEAN, "reportspeed", -1 },
+    { "resolve", 0, OPT_VALUE, "resolve", -1 },
     { "restrict-file-names", 0, OPT_BOOLEAN, "restrictfilenames", -1 },
     { "retr-symlinks", 0, OPT_BOOLEAN, "retrsymlinks", -1 },
     { "retry-connrefused", 0, OPT_BOOLEAN, "retryconnrefused", -1 },
@@ -711,6 +712,9 @@ Download:\n"),
        --limit-rate=RATE           limit download rate to RATE\n"),
     N_("\
        --no-dns-cache              disable caching DNS lookups\n"),
+    N_("\
+       --resolve=HOST:IP           set hostname to IP resolution. \n\
+                                     Note: this option is incompatible with --no-dns-cache.\n"),
     N_("\
        --restrict-file-names=OS    restrict chars in file names to ones OS allows\n"),
     N_("\
@@ -1646,6 +1650,13 @@ main (int argc, char **argv)
     {
       fprintf (stderr, _("\
 Can't timestamp and not clobber old files at the same time.\n"));
+      print_usage (1);
+      exit (WGET_EXIT_GENERIC_ERROR);
+    }
+  if (!opt.dns_cache && opt.resolve)
+    {
+      fprintf (stderr, _("\
+Cannot set resolve and disable DNS cache at the same time.\n"));
       print_usage (1);
       exit (WGET_EXIT_GENERIC_ERROR);
     }

@@ -59,6 +59,7 @@ all_tests(void)
   mu_run_test (test_append_uri_pathel);
   mu_run_test (test_are_urls_equal);
   mu_run_test (test_is_robots_txt_url);
+  mu_run_test (test_resolve_argument_parse);
 #ifdef HAVE_HSTS
   mu_run_test (test_hsts_new_entry);
   mu_run_test (test_hsts_url_rewrite_superdomain);

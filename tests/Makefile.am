@@ -114,6 +114,7 @@ PX_TESTS = \
              Test-proxied-https-auth.px \
              Test-proxied-https-auth-keepalive.px \
              Test-proxy-auth-basic.px \
+             Test--resolve.px \
              Test-restrict-ascii.px \
              Test-Restrict-Lowercase.px \
              Test-Restrict-Uppercase.px \
