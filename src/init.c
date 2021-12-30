@@ -111,6 +111,7 @@ CMD_DECLARE (cmd_spec_progress);
 CMD_DECLARE (cmd_spec_progressdisp);
 CMD_DECLARE (cmd_spec_recursive);
 CMD_DECLARE (cmd_spec_regex_type);
+CMD_DECLARE (cmd_spec_resolve_host);
 CMD_DECLARE (cmd_spec_restrict_file_names);
 CMD_DECLARE (cmd_spec_report_speed);
 #ifdef HAVE_SSL
@@ -309,6 +310,7 @@ static const struct {
   { "remoteencoding",   &opt.encoding_remote,   cmd_string },
   { "removelisting",    &opt.remove_listing,    cmd_boolean },
   { "reportspeed",             &opt.report_bps, cmd_spec_report_speed},
+  { "resolve",          &opt.resolve,           cmd_spec_resolve_host },
   { "restrictfilenames", NULL,                  cmd_spec_restrict_file_names },
   { "retrsymlinks",     &opt.retr_symlinks,     cmd_boolean },
   { "retryconnrefused", &opt.retry_connrefused, cmd_boolean },
@@ -512,6 +514,7 @@ defaults (void)
 #endif
 
   opt.enable_xattr = false;
+  opt.resolve = false;
 }
 
 /* Return the user's home directory (strdup-ed), or NULL if none is
@@ -1550,6 +1553,46 @@ cmd_spec_header (const char *com, const char *val, void *place_ignored _GL_UNUSE
   return true;
 }
 
+struct host_ip {
+  char host[256];
+  char ip[256];
+};
+
+static bool
+split_host_ip (const char *value, struct host_ip *result)
+{
+  if (!value || !result) return false;
+
+  size_t val_len = strnlen (value, 256);
+  char *pos = strpbrk (value, ":");
+  return pos &&
+      pos - value < val_len &&
+      0 < snprintf (result->host, pos - value + 1, "%s", value) &&
+      0 < snprintf (result->ip, val_len + value - pos, "%s", pos + 1);
+}
+
+static bool
+cmd_spec_resolve_host (const char *com, const char *val, void *place)
+{
+  struct host_ip split_result;
+  bool result = false;
+  if (split_host_ip (val, &split_result))
+    {
+      if (!cache_host_ip (split_result.host, split_result.ip))
+        {
+          fprintf (stderr,
+              _("%s: %s: Invalid IP value: %s\n"), exec_name, com, quote (split_result.ip));
+        }
+      else result = true;
+    }
+  else
+    {
+      fprintf (stderr, _("%s: %s: Invalid HOST:IP value: %s.\n"), exec_name, com, quote (val));
+    }
+  *(bool*)place = result;
+  return result;
+}
+
 static bool
 cmd_spec_warc_header (const char *com, const char *val, void *place_ignored _GL_UNUSED)
 {
@@ -2127,6 +2170,49 @@ test_cmd_spec_restrict_file_names(void)
                  && (int) opt.restrict_files_os   == test_array[i].expected_restrict_files_os
                  && opt.restrict_files_ctrl == test_array[i].expected_restrict_files_ctrl
                  && (int) opt.restrict_files_case == test_array[i].expected_restrict_files_case);
+    }
+
+  return NULL;
+}
+
+const char *
+test_resolve_argument_parse(void)
+{
+  unsigned i;
+  static const struct {
+    const char *value;
+    const char *expected_host;
+    const char *expected_ip;
+  } test_array[] = {
+    // IPv4 addresses:
+    { "example.com:127.0.0.1", "example.com", "127.0.0.1" },
+    { "example.com:01.102.103.104", "example.com", "01.102.103.104" },
+    // Normal IPv6 addresses
+    { "example.com:2001:db8:3333:4444:CCCC:DDDD:EEEE:FFFF",
+        "example.com", "2001:db8:3333:4444:CCCC:DDDD:EEEE:FFFF" },
+    { "example.com:::", "example.com", "::" },
+    { "example.com:2001:db8::", "example.com", "2001:db8::" },
+    { "example.com:::1234:5678", "example.com", "::1234:5678" },
+    { "example.com:2001:db8::1234:5678", "example.com", "2001:db8::1234:5678" },
+    // Dual IPv6 addresses
+    { "example.com:2001:db8::123.123.123.123", "example.com", "2001:db8::123.123.123.123" },
+    { "example.com:::1234:5678:1.2.3.4", "example.com", "::1234:5678:1.2.3.4" },
+    { "example.com:2001:db8::1234:5678:5.6.7.8", "example.com", "2001:db8::1234:5678:5.6.7.8" },
+    { "example.com:::11.22.33.44", "example.com", "::11.22.33.44" },
+    { "example.com:::1234:5678:91.123.4.56", "example.com", "::1234:5678:91.123.4.56" },
+  };
+
+  for (i = 0; i < countof(test_array); ++i)
+    {
+      struct host_ip result;
+
+      mu_assert ("test_resolve_argument_parse: cannot split",
+                  split_host_ip (test_array[i].value, &result));
+
+      mu_assert ("test_resolve_argument_parse: wrong host",
+                  0 == strcmp (test_array[i].expected_host, result.host));
+      mu_assert ("test_resolve_argument_parse: wrong ip",
+                  0 == strcmp (test_array[i].expected_ip, result.ip));
     }
 
   return NULL;
